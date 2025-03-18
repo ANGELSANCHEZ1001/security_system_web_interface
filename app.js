@@ -5,7 +5,7 @@ const path = require('path');
 const mongoose = require("mongoose");
 const Image = require('./models/image.js');
 
-mongoose.connect('mongodb://localhost:27017/imageDB', {
+mongoose.connect('mongodb://143.198.171.247:27017/imageDB', {
     useNewUrlParser: true,
     useUnifiedTopology: true,
 }).then(() => {
@@ -62,4 +62,4 @@ app.post('/images', async (req, res) => {
 });
 
 const port = 4321;
-app.listen(port, () => console.log(`🚀 Servidor en http://localhost:${port}`));
+app.listen(port, () => console.log(`🚀 Servidor en http://0.0.0.0:${port}`));

@@ -99,7 +99,7 @@
             }
 
             try {
-                const response = await fetch(`http://localhost:4321/images/${key}`);
+                const response = await fetch(`http://143.198.171.247:4321/images/${key}`);
                 if (!response.ok) throw new Error('Error al obtener imágenes');
 
                 const images = await response.json();
