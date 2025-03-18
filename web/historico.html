@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Galería desde MongoDB</title>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -25,7 +26,13 @@
       text-decoration: none;
       margin: 10px;
     }
-    #image-container {
+    .month-section {
+      margin-top: 20px;
+      padding: 10px;
+      background: #ddd;
+      border-radius: 10px;
+    }
+    .image-container {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
@@ -51,7 +58,6 @@
       transform: scale(1.1);
       border-color: #666;
     }
-    /* ESTILOS DEL MODAL */
     #image-modal {
       display: none;
       position: fixed;
@@ -65,13 +71,10 @@
       align-items: center;
     }
     #modal-content {
-      max-width: 80%;
-      max-height: 80%;
+      max-width: 90%;
+      max-height: 90%;
       border-radius: 10px;
       transition: transform 0.2s;
-      /* Se inicia sin zoom */
-      transform: scale(1);
-      transform-origin: center center;
     }
   </style>
 </head>
@@ -81,99 +84,133 @@
     <a href="fotos.html">Galería</a>
   </div>
   <h1>Galería de Imágenes</h1>
-  <div id="image-container"></div>
+  <label for="month-select">Seleccionar mes:</label>
+  <select id="month-select" onchange="filterByMonth()">
+    <option value="all">Todos</option>
+  </select>
+  <div id="gallery"></div>
 
-  <!-- MODAL PARA ZOOM -->
   <div id="image-modal" onclick="closeModal()">
-    <img id="modal-content" src="" alt="Imagen en zoom">
+    <img id="modal-content" src="" alt="Imagen en zoom" onclick="zoomImage(event)">
   </div>
 
   <script>
-    // Variables globales para el zoom
-    let currentZoom = 1;
-    const zoomFactor = 1.2; // Factor de incremento en cada clic
-
-    function formatDateTime(datetimeStr) {
-      if (!datetimeStr || datetimeStr.length !== 14) return "Fecha: 0000-00-00 00:00:00";
-      
-      const year = datetimeStr.substring(0, 4) || "0000";
-      const month = datetimeStr.substring(4, 6) || "00";
-      const day = datetimeStr.substring(6, 8) || "00";
-      const hour = datetimeStr.substring(8, 10) || "00";
-      const minute = datetimeStr.substring(10, 12) || "00";
-      const second = datetimeStr.substring(12, 14) || "00";
-      
-      return `Fecha: ${year}-${month}-${day} ${hour}:${minute}:${second}`;
-    }
+    const socket = io('http://localhost:4321'); // Conectar con WebSockets
+    const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    let groupedImages = {};
+    let currentScale = 1;
 
     async function fetchImages() {
       try {
-        const response = await fetch('http://143.198.171.247:4321/images');
+        const response = await fetch('http://localhost:4321/images');
         if (!response.ok) throw new Error('Error al obtener imágenes');
-    
         const images = await response.json();
-        console.log('📷 Imágenes obtenidas:', images);
-    
-        const container = document.getElementById('image-container');
-        container.innerHTML = '';
-    
-        images.forEach(image => {
-          if (!image.url || image.url.length < 100) {
-            console.error('❌ Imagen corrupta o vacía:', image);
-            return;
-          }
-    
-          const imageItem = document.createElement('div');
-          imageItem.classList.add('image-item');
-    
-          const imgElement = document.createElement('img');
-          imgElement.src = image.url;
-          imgElement.alt = image.title || 'Imagen';
-          // Al hacer clic en la miniatura se abre el modal
-          imgElement.onclick = () => openModal(image.url);
-          
-          const dateElement = document.createElement('p');
-          dateElement.textContent = formatDateTime(image.key);
-    
-          imageItem.appendChild(imgElement);
-          imageItem.appendChild(dateElement);
-          container.appendChild(imageItem);
-        });
+        processImages(images);
       } catch (error) {
         console.error('❌ Error al cargar imágenes:', error);
       }
     }
-    
+
+    function processImages(images) {
+      groupedImages = {};
+      images.forEach(image => {
+        if (!image.url || image.url.length < 100) return;
+        const year = image.key.substring(0, 4);
+        const month = parseInt(image.key.substring(4, 6), 10) - 1;
+        const day = image.key.substring(6, 8);
+        const hour = image.key.substring(8, 10);
+        const minute = image.key.substring(10, 12);
+        const second = image.key.substring(12, 14);
+        const formattedDate = `${day}-${monthNames[month]}-${year} ${hour}:${minute}:${second}`;
+        const monthLabel = `${monthNames[month]} ${year}`;
+        if (!groupedImages[monthLabel]) groupedImages[monthLabel] = [];
+        groupedImages[monthLabel].push({ ...image, formattedDate });
+      });
+
+      populateMonthDropdown();
+      displayImages("all");
+    }
+
+    function populateMonthDropdown() {
+      const monthSelect = document.getElementById("month-select");
+      monthSelect.innerHTML = '<option value="all">Todos</option>';
+      Object.keys(groupedImages).forEach(month => {
+        const option = document.createElement("option");
+        option.value = month;
+        option.textContent = month;
+        monthSelect.appendChild(option);
+      });
+    }
+
+    function displayImages(selectedMonth) {
+      const gallery = document.getElementById("gallery");
+      gallery.innerHTML = "";
+      Object.keys(groupedImages).forEach(month => {
+        if (selectedMonth !== "all" && month !== selectedMonth) return;
+        const monthSection = document.createElement("div");
+        monthSection.classList.add("month-section");
+        const title = document.createElement("h2");
+        title.textContent = month;
+        monthSection.appendChild(title);
+        const container = document.createElement("div");
+        container.classList.add("image-container");
+        groupedImages[month].forEach(image => {
+          const imageItem = document.createElement("div");
+          imageItem.classList.add("image-item");
+          const imgElement = document.createElement("img");
+          imgElement.src = image.url;
+          imgElement.alt = "Imagen";
+          imgElement.onclick = () => openModal(image.url);
+          const dateElement = document.createElement("p");
+          dateElement.textContent = `Fecha: ${image.formattedDate}`;
+          imageItem.appendChild(imgElement);
+          imageItem.appendChild(dateElement);
+          container.appendChild(imageItem);
+        });
+        monthSection.appendChild(container);
+        gallery.appendChild(monthSection);
+      });
+    }
+
+    function filterByMonth() {
+      const selectedMonth = document.getElementById("month-select").value;
+      displayImages(selectedMonth);
+    }
+
     function openModal(imageUrl) {
       const modal = document.getElementById('image-modal');
       const modalImg = document.getElementById('modal-content');
-      // Reinicia el zoom al abrir
-      currentZoom = 1;
-      modalImg.style.transform = 'scale(1)';
-      modalImg.style.transformOrigin = 'center center';
       modalImg.src = imageUrl;
       modal.style.display = "flex";
-
-      // Asigna el evento de clic para hacer zoom en la imagen
-      modalImg.onclick = function(e) {
-        // Evita que se cierre el modal (ya que el modal también escucha clics)
-        e.stopPropagation();
-        // Obtiene las coordenadas relativas de donde se hizo clic en la imagen
-        const rect = modalImg.getBoundingClientRect();
-        const offsetX = e.clientX - rect.left;
-        const offsetY = e.clientY - rect.top;
-        const originX = (offsetX / rect.width) * 100;
-        const originY = (offsetY / rect.height) * 100;
-        modalImg.style.transformOrigin = `${originX}% ${originY}%`;
-        // Incrementa el nivel de zoom
-        currentZoom *= zoomFactor;
-        modalImg.style.transform = `scale(${currentZoom})`;
-      };
+      currentScale = 1;
+      modalImg.style.transform = `scale(${currentScale})`;
     }
 
     function closeModal() {
       document.getElementById('image-modal').style.display = "none";
     }
+
+    function zoomImage(event) {
+      event.stopPropagation();
+      const modalImg = document.getElementById('modal-content');
+      currentScale += 0.1;
+      modalImg.style.transform = `scale(${currentScale})`;
+    }
+
+    document.getElementById('modal-content').addEventListener('wheel', function(event) {
+      event.preventDefault();
+      const modalImg = document.getElementById('modal-content');
+      currentScale += event.deltaY < 0 ? 0.1 : -0.1;
+      modalImg.style.transform = `scale(${currentScale})`;
+    });
+
+    // 📡 Escuchar nuevas imágenes en tiempo real desde WebSockets
+    socket.on('new_image', (image) => {
+      console.log("📸 Nueva imagen recibida:", image);
+      if (!groupedImages[image.key]) groupedImages[image.key] = [];
+      groupedImages[image.key].push(image);
+      displayImages(document.getElementById("month-select").value);
+    });
 
     fetchImages();
   </script>
