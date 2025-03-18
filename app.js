@@ -8,7 +8,7 @@ const { Server } = require("socket.io"); // Nuevo: WebSockets
 const Image = require('./models/image.js');
 
 // Conexión a MongoDB
-mongoose.connect('mongodb://localhost:27017/imageDB', {
+mongoose.connect('mongodb://143.198.171.247:27017/imageDB', {
     useNewUrlParser: true,
     useUnifiedTopology: true,
 }).then(() => {
