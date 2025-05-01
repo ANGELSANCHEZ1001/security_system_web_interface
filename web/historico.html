@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Galería desde MongoDB</title>
   <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <style>
@@ -24,6 +24,9 @@
     #menu a {
       color: white;
       text-decoration: none;
+      margin: 10px;
+    }
+    #month-select {
       margin: 10px;
     }
     .month-section {
@@ -71,10 +74,12 @@
       align-items: center;
     }
     #modal-content {
-      max-width: 90%;
-      max-height: 90%;
+      max-width: 80%;
+      max-height: 80%;
       border-radius: 10px;
       transition: transform 0.2s;
+      transform: scale(1);
+      transform-origin: center center;
     }
   </style>
 </head>
@@ -91,124 +96,118 @@
   <div id="gallery"></div>
 
   <div id="image-modal" onclick="closeModal()">
-    <img id="modal-content" src="" alt="Imagen en zoom" onclick="zoomImage(event)">
+    <img id="modal-content" src="" alt="Imagen en zoom" />
   </div>
 
   <script>
-    const socket = io('http://localhost:4321'); // Conectar con WebSockets
+    const socket = io('http://localhost:4321');
     const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
     let groupedImages = {};
-    let currentScale = 1;
 
-    async function fetchImages() {
-      try {
-        const response = await fetch('http://localhost:4321/images');
-        if (!response.ok) throw new Error('Error al obtener imágenes');
-        const images = await response.json();
-        processImages(images);
-      } catch (error) {
-        console.error('❌ Error al cargar imágenes:', error);
-      }
+    function formatDateTime(key) {
+      const year = key.substring(0, 4);
+      const month = parseInt(key.substring(4, 6), 10) - 1;
+      const day = key.substring(6, 8);
+      const hour = key.substring(8, 10);
+      const minute = key.substring(10, 12);
+      const second = key.substring(12, 14);
+      return `${day}-${monthNames[month]}-${year} ${hour}:${minute}:${second}`;
     }
 
-    function processImages(images) {
+    function groupImages(images) {
       groupedImages = {};
       images.forEach(image => {
         if (!image.url || image.url.length < 100) return;
         const year = image.key.substring(0, 4);
         const month = parseInt(image.key.substring(4, 6), 10) - 1;
-        const day = image.key.substring(6, 8);
-        const hour = image.key.substring(8, 10);
-        const minute = image.key.substring(10, 12);
-        const second = image.key.substring(12, 14);
-        const formattedDate = `${day}-${monthNames[month]}-${year} ${hour}:${minute}:${second}`;
         const monthLabel = `${monthNames[month]} ${year}`;
+        const formattedDate = formatDateTime(image.key);
         if (!groupedImages[monthLabel]) groupedImages[monthLabel] = [];
         groupedImages[monthLabel].push({ ...image, formattedDate });
       });
-
-      populateMonthDropdown();
-      displayImages("all");
     }
 
     function populateMonthDropdown() {
-      const monthSelect = document.getElementById("month-select");
-      monthSelect.innerHTML = '<option value="all">Todos</option>';
+      const select = document.getElementById("month-select");
+      select.innerHTML = '<option value="all">Todos</option>';
       Object.keys(groupedImages).forEach(month => {
         const option = document.createElement("option");
         option.value = month;
         option.textContent = month;
-        monthSelect.appendChild(option);
+        select.appendChild(option);
       });
     }
 
-    function displayImages(selectedMonth) {
+    function displayImages(month) {
       const gallery = document.getElementById("gallery");
       gallery.innerHTML = "";
-      Object.keys(groupedImages).forEach(month => {
-        if (selectedMonth !== "all" && month !== selectedMonth) return;
-        const monthSection = document.createElement("div");
-        monthSection.classList.add("month-section");
+      Object.entries(groupedImages).forEach(([group, images]) => {
+        if (month !== 'all' && group !== month) return;
+        const section = document.createElement("div");
+        section.className = "month-section";
         const title = document.createElement("h2");
-        title.textContent = month;
-        monthSection.appendChild(title);
+        title.textContent = group;
         const container = document.createElement("div");
-        container.classList.add("image-container");
-        groupedImages[month].forEach(image => {
-          const imageItem = document.createElement("div");
-          imageItem.classList.add("image-item");
-          const imgElement = document.createElement("img");
-          imgElement.src = image.url;
-          imgElement.alt = "Imagen";
-          imgElement.onclick = () => openModal(image.url);
-          const dateElement = document.createElement("p");
-          dateElement.textContent = `Fecha: ${image.formattedDate}`;
-          imageItem.appendChild(imgElement);
-          imageItem.appendChild(dateElement);
-          container.appendChild(imageItem);
+        container.className = "image-container";
+        images.forEach(image => {
+          const item = document.createElement("div");
+          item.className = "image-item";
+          const img = document.createElement("img");
+          img.src = image.url;
+          img.onclick = () => openModal(image.url);
+          const date = document.createElement("p");
+          date.textContent = image.formattedDate;
+          const clase = document.createElement("p");
+          clase.textContent = `Clase: ${image.clase || 'N/A'}`;
+          const confianza = document.createElement("p");
+          confianza.textContent = `Confianza: ${image.confidence?.toFixed(2) || '0'}%`;
+          item.appendChild(img);
+          item.appendChild(date);
+          item.appendChild(clase);
+          item.appendChild(confianza);
+          container.appendChild(item);
         });
-        monthSection.appendChild(container);
-        gallery.appendChild(monthSection);
+        section.appendChild(title);
+        section.appendChild(container);
+        gallery.appendChild(section);
       });
     }
 
     function filterByMonth() {
-      const selectedMonth = document.getElementById("month-select").value;
-      displayImages(selectedMonth);
+      const selected = document.getElementById("month-select").value;
+      displayImages(selected);
     }
 
-    function openModal(imageUrl) {
+    function openModal(url) {
       const modal = document.getElementById('image-modal');
-      const modalImg = document.getElementById('modal-content');
-      modalImg.src = imageUrl;
+      const img = document.getElementById('modal-content');
+      img.src = url;
       modal.style.display = "flex";
-      currentScale = 1;
-      modalImg.style.transform = `scale(${currentScale})`;
     }
 
     function closeModal() {
       document.getElementById('image-modal').style.display = "none";
     }
 
-    function zoomImage(event) {
-      event.stopPropagation();
-      const modalImg = document.getElementById('modal-content');
-      currentScale += 0.1;
-      modalImg.style.transform = `scale(${currentScale})`;
+    async function fetchImages() {
+      try {
+        const response = await fetch('http://localhost:4321/images');
+        const images = await response.json();
+        groupImages(images);
+        populateMonthDropdown();
+        displayImages("all");
+      } catch (err) {
+        console.error("Error al obtener imágenes:", err);
+      }
     }
 
-    document.getElementById('modal-content').addEventListener('wheel', function(event) {
-      event.preventDefault();
-      const modalImg = document.getElementById('modal-content');
-      currentScale += event.deltaY < 0 ? 0.1 : -0.1;
-      modalImg.style.transform = `scale(${currentScale})`;
-    });
-
-    // 📡 Escuchar nuevas imágenes en tiempo real desde WebSockets
-    socket.on('new_image', (image) => {
-      console.log("📸 Nueva imagen recibida:", image);
-      if (!groupedImages[image.key]) groupedImages[image.key] = [];
-      groupedImages[image.key].push(image);
+    socket.on('new_image', image => {
+      const month = parseInt(image.key.substring(4, 6), 10) - 1;
+      const year = image.key.substring(0, 4);
+      const label = `${monthNames[month]} ${year}`;
+      const formattedDate = formatDateTime(image.key);
+      if (!groupedImages[label]) groupedImages[label] = [];
+      groupedImages[label].push({ ...image, formattedDate });
       displayImages(document.getElementById("month-select").value);
     });
 
