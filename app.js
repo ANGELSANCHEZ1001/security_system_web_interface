@@ -10,6 +10,7 @@ const { Server } = require("socket.io");
 const PORT = 4321;
 const MONGO_URI = 'mongodb://admin:Passw0rd_1@localhost:27017/imageDB?authSource=admin';
 
+
 // Servidor HTTP y WebSocket
 const server = http.createServer(app);
 const io = new Server(server, {
